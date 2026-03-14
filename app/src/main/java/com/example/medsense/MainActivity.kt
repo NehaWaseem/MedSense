@@ -8,6 +8,7 @@ import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
 import android.speech.tts.TextToSpeech
+import android.speech.tts.UtteranceProgressListener
 import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -25,12 +26,12 @@ class MainActivity : ComponentActivity() {
     private var textToSpeech: TextToSpeech? = null
     private var speechRecognizer: SpeechRecognizer? = null
     private var recognitionIntent: Intent? = null
+    private var isSpeaking = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
-        // Check for record audio permission
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
             ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.RECORD_AUDIO), 1)
         }
@@ -38,6 +39,36 @@ class MainActivity : ComponentActivity() {
         setContent {
             var isTtsReady by remember { mutableStateOf(false) }
             var triggerCapture by remember { mutableStateOf(false) }
+            var isListening by remember { mutableStateOf(false) }
+
+            // Initialize TTS with Progress Listener
+            DisposableEffect(Unit) {
+                textToSpeech = TextToSpeech(this@MainActivity) { status ->
+                    if (status == TextToSpeech.SUCCESS) {
+                        textToSpeech?.language = Locale.US
+                        isTtsReady = true
+                        
+                        textToSpeech?.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
+                            override fun onStart(utteranceId: String?) {
+                                isSpeaking = true
+                                stopListening()
+                            }
+                            override fun onDone(utteranceId: String?) {
+                                isSpeaking = false
+                                startListening()
+                            }
+                            override fun onError(utteranceId: String?) {
+                                isSpeaking = false
+                                startListening()
+                            }
+                        })
+                    }
+                }
+                onDispose {
+                    textToSpeech?.stop()
+                    textToSpeech?.shutdown()
+                }
+            }
 
             // Initialize Speech Recognizer
             DisposableEffect(Unit) {
@@ -49,39 +80,31 @@ class MainActivity : ComponentActivity() {
                 }
 
                 speechRecognizer?.setRecognitionListener(object : RecognitionListener {
-                    override fun onReadyForSpeech(params: Bundle?) { Log.d("Speech", "Ready") }
+                    override fun onReadyForSpeech(params: Bundle?) { 
+                        isListening = true
+                        Log.d("Speech", "Ready") 
+                    }
                     override fun onBeginningOfSpeech() {}
                     override fun onRmsChanged(rmsdB: Float) {}
                     override fun onBufferReceived(buffer: ByteArray?) {}
-                    override fun onEndOfSpeech() {}
+                    override fun onEndOfSpeech() { isListening = false }
                     override fun onError(error: Int) {
-                        Log.e("Speech", "Error: $error")
-                        // Restart listening if error occurs (optional)
-                        startListening()
+                        isListening = false
+                        // Error 7 is no speech detected; we restart if not speaking
+                        if (!isSpeaking) startListening()
                     }
                     override fun onResults(results: Bundle?) {
+                        isListening = false
                         val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
                         if (matches != null) {
-                            for (match in matches) {
-                                if (match.lowercase().contains("identify medicine") || 
-                                    match.lowercase().contains("scan")) {
-                                    triggerCapture = true
-                                    break
-                                }
-                            }
+                            processMatches(matches) { triggerCapture = true }
                         }
-                        startListening() // Keep listening
+                        if (!isSpeaking) startListening()
                     }
                     override fun onPartialResults(partialResults: Bundle?) {
                         val matches = partialResults?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
                         if (matches != null) {
-                            for (match in matches) {
-                                if (match.lowercase().contains("identify medicine") || 
-                                    match.lowercase().contains("scan")) {
-                                    triggerCapture = true
-                                    break
-                                }
-                            }
+                            processMatches(matches) { triggerCapture = true }
                         }
                     }
                     override fun onEvent(eventType: Int, params: Bundle?) {}
@@ -91,20 +114,6 @@ class MainActivity : ComponentActivity() {
 
                 onDispose {
                     speechRecognizer?.destroy()
-                }
-            }
-
-            // Initialize TTS
-            DisposableEffect(Unit) {
-                textToSpeech = TextToSpeech(this@MainActivity) { status ->
-                    if (status == TextToSpeech.SUCCESS) {
-                        textToSpeech?.language = Locale.US
-                        isTtsReady = true
-                    }
-                }
-                onDispose {
-                    textToSpeech?.stop()
-                    textToSpeech?.shutdown()
                 }
             }
 
@@ -118,15 +127,38 @@ class MainActivity : ComponentActivity() {
                 MedicineRecognitionRoute(
                     speakText = speak,
                     triggerCapture = triggerCapture,
-                    onCaptureHandled = { triggerCapture = false }
+                    onCaptureHandled = { triggerCapture = false },
+                    isListening = isListening
                 )
             }
         }
     }
 
+    private fun processMatches(matches: ArrayList<String>, onTrigger: () -> Unit) {
+        for (match in matches) {
+            val lower = match.lowercase()
+            if (lower.contains("identify medicine") || lower.contains("scan")) {
+                onTrigger()
+                break
+            }
+        }
+    }
+
     private fun startListening() {
+        if (isSpeaking) return
         runOnUiThread {
-            speechRecognizer?.startListening(recognitionIntent)
+            try {
+                speechRecognizer?.startListening(recognitionIntent)
+            } catch (e: Exception) {
+                Log.e("Speech", "Start error", e)
+            }
+        }
+    }
+
+    private fun stopListening() {
+        runOnUiThread {
+            speechRecognizer?.stopListening()
+            speechRecognizer?.cancel()
         }
     }
 

@@ -14,24 +14,10 @@ import androidx.camera.core.Preview
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
+import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -55,6 +41,7 @@ fun MedicineRecognitionRoute(
     speakText: (String) -> Unit,
     triggerCapture: Boolean = false,
     onCaptureHandled: () -> Unit = {},
+    isListening: Boolean = false,
     viewModel: MedicineRecognitionViewModel = viewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -72,6 +59,7 @@ fun MedicineRecognitionRoute(
         uiState = uiState,
         triggerCapture = triggerCapture,
         onCaptureHandled = onCaptureHandled,
+        isListening = isListening,
         onCameraPermissionResult = viewModel::onCameraPermissionResult,
         onImageCaptured = viewModel::onImageCaptured
     )
@@ -83,6 +71,7 @@ private fun MedicineRecognitionScreen(
     uiState: MedicineRecognitionUiState,
     triggerCapture: Boolean,
     onCaptureHandled: () -> Unit,
+    isListening: Boolean,
     onCameraPermissionResult: (Boolean) -> Unit,
     onImageCaptured: (Uri, Context) -> Unit
 ) {
@@ -106,7 +95,6 @@ private fun MedicineRecognitionScreen(
         onDispose { }
     }
 
-    // Logic to auto-capture when triggered by voice
     LaunchedEffect(triggerCapture) {
         if (triggerCapture && !uiState.isProcessing && uiState.isCameraPermissionGranted) {
             val capture = imageCapture
@@ -139,12 +127,34 @@ private fun MedicineRecognitionScreen(
             .background(Color(0xFF0B0B1A))
             .padding(16.dp)
     ) {
-        Text(
-            text = "MedSense Scanner",
-            style = MaterialTheme.typography.headlineSmall.copy(color = Color.White, fontWeight = FontWeight.Bold),
-            modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
-            textAlign = TextAlign.Center
-        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "MedSense Scanner",
+                style = MaterialTheme.typography.headlineSmall.copy(color = Color.White, fontWeight = FontWeight.Bold)
+            )
+            
+            // Visual Voice Status Indicator
+            if (isListening) {
+                Surface(
+                    shape = MaterialTheme.shapes.small,
+                    color = Color.Green.copy(alpha = 0.2f),
+                    modifier = Modifier.padding(4.dp)
+                ) {
+                    Text(
+                        "Listening...", 
+                        color = Color.Green, 
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                        style = MaterialTheme.typography.labelSmall
+                    )
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
 
         Card(modifier = Modifier.fillMaxWidth().weight(0.4f)) {
             Box(modifier = Modifier.fillMaxSize()) {
@@ -205,7 +215,7 @@ private fun MedicineRecognitionScreen(
                         
                         Text("Warnings:", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleSmall)
                         Text(med.warnings, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.error)
-                    } ?: Text(uiState.errorMessage ?: "Ready to scan.")
+                    } ?: Text(uiState.errorMessage ?: "Ready to scan. Say 'Identify Medicine' or 'Scan' to start.")
                 }
 
                 Spacer(modifier = Modifier.height(8.dp))
