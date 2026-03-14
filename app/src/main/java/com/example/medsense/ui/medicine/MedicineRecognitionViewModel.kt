@@ -45,7 +45,7 @@ class MedicineRecognitionViewModel(
         _uiState.value = _uiState.value.copy(
             isProcessing = true,
             errorMessage = null,
-            ttsOutput = null
+            ttsOutput = "Analyzing"
         )
 
         ocrProcessor.processImage(
