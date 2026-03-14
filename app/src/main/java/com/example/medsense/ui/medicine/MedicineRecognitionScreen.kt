@@ -35,10 +35,8 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -52,10 +50,10 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
-import kotlinx.coroutines.launch
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Locale
+import androidx.compose.runtime.LaunchedEffect
 
 @RequiresApi(Build.VERSION_CODES.R)
 @Composable
@@ -64,26 +62,14 @@ fun MedicineRecognitionRoute(
     viewModel: MedicineRecognitionViewModel = viewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    var lastSpokenKey by remember { mutableStateOf("") }
+    var lastSpokenOutput by remember { mutableStateOf("") }
 
-    LaunchedEffect(uiState.matchedMedicine, uiState.isProcessing, uiState.errorMessage) {
-        if (!uiState.isProcessing) {
-            val med = uiState.matchedMedicine
-            val error = uiState.errorMessage
-            
-            val key = med?.let { "${it.name}|${it.recommendedDosage}|${it.warnings}" } ?: error ?: ""
-            
-            if (key.isNotEmpty() && key != lastSpokenKey) {
-                lastSpokenKey = key
-                if (med != null) {
-                    val fullSpeech = "Found ${med.name}. Strength ${med.strengthMg}. " +
-                            "Dosage: ${med.recommendedDosage}. " +
-                            "Warnings: ${med.warnings}"
-                    speakText(fullSpeech)
-                } else if (error != null) {
-                    speakText(error)
-                }
-            }
+    // Observe ttsOutput for speech
+    LaunchedEffect(uiState.ttsOutput) {
+        val output = uiState.ttsOutput
+        if (output != null && output != lastSpokenOutput) {
+            speakText(output)
+            lastSpokenOutput = output
         }
     }
 
@@ -186,13 +172,22 @@ private fun MedicineRecognitionScreen(
                 } else {
                     uiState.matchedMedicine?.let { med ->
                         Text(med.name, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                        if (med.strengthMg.isNotBlank()) Text("Strength: ${med.strengthMg}", style = MaterialTheme.typography.bodyMedium)
+                        if (med.strength.isNotBlank()) Text("Strength: ${med.strength}", style = MaterialTheme.typography.bodyMedium)
                         
                         Text("Dosage:", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleSmall)
-                        Text(med.recommendedDosage, style = MaterialTheme.typography.bodyMedium)
+                        Text(med.dosage, style = MaterialTheme.typography.bodyMedium)
                         
                         Text("Warnings:", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleSmall)
                         Text(med.warnings, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.error)
+                        
+                        if (!med.isConfident) {
+                            Spacer(Modifier.height(8.dp))
+                            Text(
+                                "Note: Low confidence match. Please verify with packaging.",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.secondary
+                            )
+                        }
                     } ?: Text(uiState.errorMessage ?: "Ready to scan.")
                 }
 
