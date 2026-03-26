@@ -10,7 +10,7 @@ import com.example.medsense.domain.MedicineInfo
 import com.example.medsense.ml.MlKitOcrProcessor
 import com.example.medsense.ml.OcrProcessor
 import com.example.medsense.ml.OcrResult
-import com.example.medsense.util.SpeechFormatter
+import com.example.medsense.util.MedicineTextFormatter
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
@@ -79,7 +79,7 @@ class MedicineRecognitionViewModel(
                     ttsOutput = "I'm not confident this is a medicine package."
                 )
             } else {
-                val speechText = SpeechFormatter.formatForSpeech(matched)
+                val speechText = MedicineTextFormatter.formatForSpeech(matched)
                 _uiState.value = _uiState.value.copy(
                     isProcessing = false,
                     recognizedText = result.fullText,
