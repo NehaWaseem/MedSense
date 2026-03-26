@@ -27,6 +27,7 @@ class MainActivity : ComponentActivity() {
     private var speechRecognizer: SpeechRecognizer? = null
     private var recognitionIntent: Intent? = null
     private var isSpeaking = false
+    private var isProcessingCapture = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -48,6 +49,14 @@ class MainActivity : ComponentActivity() {
                         textToSpeech?.language = Locale.US
                         isTtsReady = true
                         
+                        // Initial Greeting
+                        textToSpeech?.speak(
+                            "Med Sense is active. Say identify medicine or scan to begin.",
+                            TextToSpeech.QUEUE_FLUSH,
+                            null,
+                            "greeting"
+                        )
+
                         textToSpeech?.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
                             override fun onStart(utteranceId: String?) {
                                 isSpeaking = true
@@ -55,11 +64,15 @@ class MainActivity : ComponentActivity() {
                             }
                             override fun onDone(utteranceId: String?) {
                                 isSpeaking = false
-                                startListening()
+                                if (utteranceId == "medicine_tts") {
+                                    isProcessingCapture = false
+                                }
+                                runOnUiThread { startListening() }
                             }
                             override fun onError(utteranceId: String?) {
                                 isSpeaking = false
-                                startListening()
+                                isProcessingCapture = false
+                                runOnUiThread { startListening() }
                             }
                         })
                     }
@@ -82,35 +95,45 @@ class MainActivity : ComponentActivity() {
                 speechRecognizer?.setRecognitionListener(object : RecognitionListener {
                     override fun onReadyForSpeech(params: Bundle?) { 
                         isListening = true
-                        Log.d("Speech", "Ready") 
                     }
                     override fun onBeginningOfSpeech() {}
                     override fun onRmsChanged(rmsdB: Float) {}
                     override fun onBufferReceived(buffer: ByteArray?) {}
-                    override fun onEndOfSpeech() { isListening = false }
+                    override fun onEndOfSpeech() { 
+                        isListening = false 
+                    }
                     override fun onError(error: Int) {
                         isListening = false
-                        // Error 7 is no speech detected; we restart if not speaking
-                        if (!isSpeaking) startListening()
+                        if (!isSpeaking && !isProcessingCapture) {
+                            runOnUiThread { startListening() }
+                        }
                     }
                     override fun onResults(results: Bundle?) {
                         isListening = false
                         val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
-                        if (matches != null) {
-                            processMatches(matches) { triggerCapture = true }
+                        if (matches != null && !isProcessingCapture) {
+                            processMatches(matches) { 
+                                isProcessingCapture = true
+                                stopListening()
+                                triggerCapture = true
+                            }
                         }
-                        if (!isSpeaking) startListening()
+                        if (!isSpeaking && !isProcessingCapture) {
+                            runOnUiThread { startListening() }
+                        }
                     }
                     override fun onPartialResults(partialResults: Bundle?) {
                         val matches = partialResults?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
-                        if (matches != null) {
-                            processMatches(matches) { triggerCapture = true }
+                        if (matches != null && !isProcessingCapture) {
+                            processMatches(matches) { 
+                                isProcessingCapture = true
+                                stopListening()
+                                triggerCapture = true
+                            }
                         }
                     }
                     override fun onEvent(eventType: Int, params: Bundle?) {}
                 })
-
-                startListening()
 
                 onDispose {
                     speechRecognizer?.destroy()
@@ -145,20 +168,18 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun startListening() {
-        if (isSpeaking) return
-        runOnUiThread {
-            try {
-                speechRecognizer?.startListening(recognitionIntent)
-            } catch (e: Exception) {
-                Log.e("Speech", "Start error", e)
-            }
+        if (isSpeaking || isProcessingCapture) return
+        try {
+            speechRecognizer?.startListening(recognitionIntent)
+        } catch (e: Exception) {
+            Log.e("Speech", "Start error", e)
         }
     }
 
     private fun stopListening() {
         runOnUiThread {
-            speechRecognizer?.stopListening()
             speechRecognizer?.cancel()
+            speechRecognizer?.stopListening()
         }
     }
 

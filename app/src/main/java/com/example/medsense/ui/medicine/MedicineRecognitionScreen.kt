@@ -25,12 +25,12 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.medsense.util.MedicineTextFormatter
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -137,7 +137,6 @@ private fun MedicineRecognitionScreen(
                 style = MaterialTheme.typography.headlineSmall.copy(color = Color.White, fontWeight = FontWeight.Bold)
             )
             
-            // Visual Voice Status Indicator
             if (isListening) {
                 Surface(
                     shape = MaterialTheme.shapes.small,
@@ -210,15 +209,27 @@ private fun MedicineRecognitionScreen(
                         Text(med.name, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                         if (med.strength.isNotBlank()) Text("Strength: ${med.strength}", style = MaterialTheme.typography.bodyMedium)
                         
-                        Text("Dosage:", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleSmall)
-                        Text(med.dosage, style = MaterialTheme.typography.bodyMedium)
+                        Divider(modifier = Modifier.padding(vertical = 4.dp))
+
+                        Text("Dosage Instructions", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleSmall)
+                        Text(
+                            text = MedicineTextFormatter.formatForDisplay(med.dosage),
+                            style = MaterialTheme.typography.bodyMedium,
+                            lineHeight = androidx.compose.ui.unit.TextUnit.Unspecified
+                        )
                         
-                        Text("Warnings:", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleSmall)
-                        Text(med.warnings, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.error)
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        Text("Safety Warnings", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.error)
+                        Text(
+                            text = MedicineTextFormatter.formatForDisplay(med.warnings),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.error
+                        )
                     } ?: Text(uiState.errorMessage ?: "Ready to scan. Say 'Identify Medicine' or 'Scan' to start.")
                 }
 
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(16.dp))
 
                 Button(
                     onClick = {
